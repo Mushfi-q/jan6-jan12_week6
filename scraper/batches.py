@@ -1,9 +1,24 @@
 def get_all_batches():
+    """
+    Generate all YC batch names in the format expected by
+    https://www.ycombinator.com/companies?batch=...
+
+    Example:
+    - Winter 2024
+    - Summer 2023
+    - Fall 2022
+    """
     batches = []
 
-    # YC batches from ~2009 onward
-    for year in range(9, 26):  # 2009 → 2025
-        batches.append(f"W{year:02d}")
-        batches.append(f"S{year:02d}")
+    START_YEAR = 2009
+    END_YEAR = 2026  # safe upper bound
+
+    for year in range(START_YEAR, END_YEAR + 1):
+        batches.append(f"Winter {year}")
+        batches.append(f"Summer {year}")
+
+        # Fall batches were introduced later
+        if year >= 2012:
+            batches.append(f"Fall {year}")
 
     return batches

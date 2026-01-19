@@ -6,7 +6,8 @@ from scraper.normalizer import normalize_snapshot
 from scraper.hasher import compute_snapshot_hash
 from scraper.logger import get_logger
 
-from scraper.batch_discovery import discover_batches
+from scraper.batches import get_all_batches
+#from scraper.batch_discovery import discover_batches
 
 from scraper.db import get_connection
 from scraper.repositories.company_repo import (
@@ -39,7 +40,13 @@ def snapshot_row_to_dict(row):
 
 
 async def run():
+    
     logger.info("Scraper started")
+
+
+    
+
+
 
     playwright, browser, context, page = await launch_browser()
     conn = get_connection()
@@ -47,29 +54,39 @@ async def run():
     seen_company_ids = set()
 
     try:
-        # 🔹 STEP 1: Discover valid YC batches dynamically
-        batches = await discover_batches(page)
-        logger.info(f"Discovered {len(batches)} batches: {batches}")
+        # STEP 1: Discover valid YC batches dynamically
+        batches = get_all_batches()
+        logger.info(f"Generated {len(batches)} batches")
 
-        all_urls = set()
+        all_companies = {}
 
-        # 🔹 STEP 2: Scrape companies batch-by-batch
         for batch in batches:
             try:
-                urls = await collect_company_urls(page, batch)
-                logger.info(f"{batch}: {len(urls)} companies found")
-                all_urls.update(urls)
+                companies = await collect_company_urls(page, batch)
+                logger.info(f"{batch}: {len(companies)} companies found")
+
+                for c in companies:
+                    all_companies[c["url"]] = c["batch"]
+
             except Exception as e:
                 logger.error(f"Failed batch {batch}: {e}")
 
-        logger.info(f"Total unique companies discovered: {len(all_urls)}")
+        logger.info(f"Total unique companies discovered: {len(all_companies)}")
 
-        # 🔹 STEP 3: Process each company (Phase 2 logic)
-        for url in all_urls:
+        # STEP 3: Process each company (Phase 2 logic)
+        for url, batch_from_index in all_companies.items():
             try:
                 # ---- Extract + normalize ----
                 raw = await extract_company_profile(page, url)
                 snapshot = normalize_snapshot(raw)
+                snapshot["batch"] = batch_from_index
+
+                required_fields = ["name"]
+
+                for f in required_fields:
+                    if not snapshot.get(f):
+                        raise ValueError(f"Missing required field: {f}")
+
                 snapshot_hash = compute_snapshot_hash(snapshot)
 
                 yc_company_id = snapshot["profile_url"].rstrip("/").split("/")[-1]
@@ -79,7 +96,7 @@ async def run():
                 existing = get_company_by_yc_id(conn, yc_company_id)
 
                 if existing is None:
-                    # 🆕 New company
+                    #  New company
                     company_id = insert_company(
                         conn, yc_company_id, name, domain
                     )
@@ -129,7 +146,7 @@ async def run():
                     exc_info=True,
                 )
 
-        # 🔹 STEP 4: Mark disappeared companies
+        # STEP 4: Mark disappeared companies
         with conn.cursor() as cur:
             cur.execute(
                 """

@@ -3,8 +3,8 @@ from playwright.async_api import async_playwright
 async def launch_browser():
     playwright = await async_playwright().start()
     browser = await playwright.chromium.launch(
-        headless=False,     # 👈 IMPORTANT
-        slow_mo=50          # 👈 helps observe rendering
+        headless=True,
+        slow_mo=0
     )
     context = await browser.new_context(
         viewport={"width": 1280, "height": 800},
